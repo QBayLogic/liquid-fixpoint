@@ -352,7 +352,7 @@ applyKVars g s ks =
 applyKVar :: CombinedEnv ann -> Sol.Sol a Sol.QBind -> F.KVSub -> ElabM ExprInfo
 applyKVar g s ksu = case Sol.lookup s (F.ksuKVar ksu) of
   Left cs   -> hypPred g s ksu cs
-  Right eqs -> do qbp <- Sol.qbPreds msg s (F.ksuSubst ksu) eqs
+  Right eqs -> do qbp <- Sol.qbPreds msg s (F.substFromKSubst $ F.ksuSubst ksu) eqs
                   pure (F.pAndNoDedup $ fst <$> qbp, mempty) -- TODO: don't initialize kvars that have a hyp solution
   where
     msg     = "applyKVar: " ++ show (ceCid g)
@@ -465,7 +465,7 @@ cubePredExc g s ksu c bs' =
     su'             = Sol.cuSubst c
     bs              = Sol.cuBinds c
     k               = F.ksuKVar   ksu
-    su              = F.ksuSubst  ksu
+    su              = F.substFromKSubst $ F.ksuSubst  ksu
     sEnv            = F.insertSEnv (F.ksuVV ksu) (F.ksuSort ksu) (F.seSort $ Sol.sEnv s)
 
 -- TODO: SUPER SLOW! Decorate all substitutions with Sorts in a SINGLE pass.

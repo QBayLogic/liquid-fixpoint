@@ -38,7 +38,7 @@ instance ToHornSMT a => ToHornSMT [a] where
   toHornSMT = toHornMany . fmap toHornSMT
 
 toHornMany :: [P.Doc] -> P.Doc
-toHornMany = P.parens . P.sep 
+toHornMany = P.parens . P.sep
 
 toHornAnd :: (a -> P.Doc) -> [a] -> P.Doc
 toHornAnd f xs = P.parens (P.vcat ("and" : (P.nest 1 . f <$> xs)))
@@ -91,7 +91,8 @@ toHornFApp ts  = toHornSMT ts
 instance ToHornSMT F.Subst where
   toHornSMT (F.Su m) = toHornSMT (Misc.hashMapToAscList m)
 
-
+instance ToHornSMT (F.KVarSubst F.Symbol F.Symbol) where
+  toHornSMT = toHornSMT . Misc.hashMapToAscList . F.fromKVarSubst
 
 instance ToHornSMT F.KVar where
   toHornSMT (F.KV k) = "$" P.<-> toHornSMT k

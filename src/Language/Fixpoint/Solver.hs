@@ -436,8 +436,8 @@ collectFreeVarOccurrences = go []
       ESym _ -> acc
       ECon _ -> acc
       EVar v -> v : acc
-      PKVar _ (Su m) -> foldr (flip go) acc $ HashMap.elems m
-      PGrad _ (Su m) _ e -> foldr (flip go) acc $ e : HashMap.elems m
+      PKVar _ su -> foldr (flip go) acc $ HashMap.elems $ fromKVarSubst su
+      PGrad _ su _ e -> foldr (flip go) acc $ e : HashMap.elems (fromKVarSubst su)
       ENeg e -> go acc e
       PNot p -> go acc p
       ECst e _t -> go acc e

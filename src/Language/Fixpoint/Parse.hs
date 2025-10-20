@@ -121,6 +121,7 @@ module Language.Fixpoint.Parse (
 import           Control.Monad (unless, void)
 import           Control.Monad.Combinators.Expr
 import qualified Data.IntMap.Strict          as IM
+import           Data.Hashable               (Hashable)
 import qualified Data.HashMap.Strict         as M
 import qualified Data.HashSet                as S
 #if !MIN_VERSION_base(4,20,0)
@@ -774,14 +775,14 @@ symconstP = SL . T.pack <$> stringLiteral
 -- liquid-fixpoint parses Symbol and LiquidHaskell instantiates this to
 -- LocSymbol for more precise error messages. If liquid-fixpoint is adapted to
 -- parse names as LocSymbol as well, this class can be eliminated.
-class (Fixpoint v, Ord v) => ParseableV v where
+class (Fixpoint v, Ord v, Hashable v) => ParseableV v where
   parseV :: ParserV v v
-  mkSu :: [(Symbol, ExprV v)] -> SubstV v
+  mkSu :: [(Symbol, ExprV v)] -> KVarSubst Symbol v
   vFromString :: Located String -> v
 
 instance ParseableV Symbol where
   parseV = symbolP
-  mkSu = mkSubst
+  mkSu = mkKVarSubst
   vFromString = symbol
 
 -- | Parser for "atomic" expressions.
@@ -1118,10 +1119,10 @@ pred0P =  trueP -- constant "true"
       <|> (reservedOp "&&" >> pGAnds <$> predsP) -- built-in prefix and
       <|> (reservedOp "||" >> POr  <$> predsP) -- built-in prefix or
 
-makeUniquePGrad :: ParserV v (ExprV v)
+makeUniquePGrad :: ParseableV v => ParserV v (ExprV v)
 makeUniquePGrad
   = do uniquePos <- getSourcePos
-       return $ PGrad (KV $ symbol $ show uniquePos) (Su mempty) (srcGradInfo uniquePos) PTrue
+       return $ PGrad (KV $ symbol $ show uniquePos) (toKVarSubst mempty) (srcGradInfo uniquePos) PTrue
 
 -- qmP    = reserved "?" <|> reserved "Bexp"
 
@@ -1139,7 +1140,7 @@ kvarPredP = PKVar <$> kvarP <*> substP
 kvarP :: ParserV v KVar
 kvarP = KV <$> lexeme (char '$' *> symbolR)
 
-substP :: ParseableV v => ParserV v (SubstV v)
+substP :: ParseableV v => ParserV v (KVarSubst Symbol v)
 substP = mkSu <$> many (brackets $ pairP symbolP aP exprP)
   where
     aP = reservedOp ":="

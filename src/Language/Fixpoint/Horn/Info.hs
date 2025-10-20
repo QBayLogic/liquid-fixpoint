@@ -117,7 +117,7 @@ predExpr kve        = go
 kvApp :: KVEnv a -> F.Symbol -> [F.Symbol] -> F.Expr
 kvApp kve k ys = F.PKVar (F.KV k) su
   where
-    su         = F.mkSubst (zip params (F.eVar <$> ys))
+    su         = F.mkKVarSubst (zip params (F.eVar <$> ys))
     params     = maybe err1 kvParams (M.lookup k kve)
     err1       = F.panic ("Unknown Horn variable: " ++ F.showpp k)
 

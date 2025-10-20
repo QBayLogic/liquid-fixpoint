@@ -259,13 +259,13 @@ rhsCands s c    =
   do pq <- traverse cnd ks
      pure (fst <$> ks, concat pq)
   where
-    cnd :: (F.KVar, F.Subst) -> ElabM [(F.Pred, (F.KVar, Sol.EQual))]
-    cnd (k, su) = map (\(p , q) -> (p , (k , q))) <$> Sol.qbPreds msg s su (Sol.lookupQBind s k)
+    cnd :: (F.KVar, F.KVarSubst F.Symbol F.Symbol) -> ElabM [(F.Pred, (F.KVar, Sol.EQual))]
+    cnd (k, su) = map (\(p , q) -> (p , (k , q))) <$> Sol.qbPreds msg s (F.substFromKSubst su) (Sol.lookupQBind s k)
     ks          = predKs . F.crhs $ c
 
     msg         = "rhsCands: " ++ show (F.sid c)
 
-predKs :: F.Expr -> [(F.KVar, F.Subst)]
+predKs :: F.ExprBV b v -> [(F.KVar, F.KVarSubst b v)]
 predKs (F.PAnd ps)    = concatMap predKs ps
 predKs (F.PKVar k su) = [(k, su)]
 predKs _              = []
