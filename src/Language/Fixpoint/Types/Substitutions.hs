@@ -1,5 +1,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeOperators     #-}
 
 {-# OPTIONS_GHC -Wno-orphans   #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -37,10 +39,10 @@ import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ.Compat
 import           Text.Printf               (printf)
 
-instance Semigroup Subst where
+instance (Eq v, Hashable v) => Semigroup (SubstV v) where
   (<>) = catSubst
 
-instance Monoid Subst where
+instance (Eq v, Hashable v) => Monoid (SubstV v) where
   mempty  = emptySubst
   mappend = (<>)
 
@@ -60,18 +62,18 @@ kSubstFromSubst (Su m) = toKVarSubst m
 ksubst :: KVarSubst Symbol Symbol -> Expr -> Expr
 ksubst = subst . substFromKSubst
 
-filterSubst :: (Symbol -> Expr -> Bool) -> Subst -> Subst
+filterSubst :: (v -> ExprBV v v -> Bool) -> SubstV v -> SubstV v
 filterSubst f (Su m) = Su (M.filterWithKey f m)
 
-emptySubst :: Subst
+emptySubst :: SubstV v
 emptySubst = Su M.empty
 
-catSubst :: Subst -> Subst -> Subst
+catSubst :: (Eq v, Hashable v) => SubstV v -> SubstV v -> SubstV v
 catSubst (Su s1) θ2@(Su s2) = Su $ M.union s1' s2
   where
     s1'                     = subst θ2 <$> s1
 
-mkSubst :: [(Symbol, Expr)] -> Subst
+mkSubst :: Hashable v => [(v, ExprBV v v)] -> SubstV v
 mkSubst = Su . M.fromList . reverse . filter notTrivial
   where
     notTrivial (x, EVar y) = x /= y
@@ -80,10 +82,10 @@ mkSubst = Su . M.fromList . reverse . filter notTrivial
 mkKVarSubst :: [(Symbol, Expr)] -> KVarSubst Symbol Symbol
 mkKVarSubst = kSubstFromSubst . mkSubst
 
-isEmptySubst :: Subst -> Bool
+isEmptySubst :: SubstV v -> Bool
 isEmptySubst (Su xes) = M.null xes
 
-targetSubstSyms :: Subst -> [Symbol]
+targetSubstSyms :: (Eq v, Hashable v) => SubstV v -> [v]
 targetSubstSyms (Su ms) = syms $ M.elems ms
 
 
@@ -94,19 +96,22 @@ instance Subable () where
   substf _ () = ()
   substa _ () = ()
 
-instance (Subable a, Subable b) => Subable (a,b) where
+instance (Subable a, Subable b, Variable a ~ Variable b) => Subable (a,b) where
+  type Variable (a, b) = Variable a
   syms  (x, y)   = syms x ++ syms y
   subst su (x,y) = (subst su x, subst su y)
   substf f (x,y) = (substf f x, substf f y)
   substa f (x,y) = (substa f x, substa f y)
 
 instance Subable a => Subable [a] where
+  type Variable [a] = Variable a
   syms   = concatMap syms
   subst  = fmap . subst
   substf = fmap . substf
   substa = fmap . substa
 
 instance Subable a => Subable (Maybe a) where
+  type Variable (Maybe a) = Variable a
   syms   = concatMap syms . maybeToList
   subst  = fmap . subst
   substf = fmap . substf
@@ -114,20 +119,21 @@ instance Subable a => Subable (Maybe a) where
 
 
 instance Subable a => Subable (M.HashMap k a) where
+  type Variable (M.HashMap k a) = Variable a
   syms   = syms . M.elems
   subst  = M.map . subst
   substf = M.map . substf
   substa = M.map . substa
 
-subst1Except :: (Subable a) => [Symbol] -> a -> (Symbol, Expr) -> a
+subst1Except :: Subable a => [Variable a] -> a -> (Variable a, ExprBV (Variable a) (Variable a)) -> a
 subst1Except xs z su@(x, _)
   | x `elem` xs = z
   | otherwise   = subst1 z su
 
-substfExcept :: (Symbol -> Expr) -> [Symbol] -> Symbol -> Expr
+substfExcept :: Eq v => (v -> ExprBV b v) -> [v] -> v -> ExprBV b v
 substfExcept f xs y = if y `elem` xs then EVar y else f y
 
-substExcept  :: Subst -> [Symbol] -> Subst
+substExcept  :: Eq v => SubstV v -> [v] -> SubstV v
 -- substExcept  (Su m) xs = Su (foldr M.delete m xs)
 substExcept (Su xes) xs = Su $ M.filterWithKey (const . not . (`elem` xs)) xes
 
@@ -137,21 +143,22 @@ instance Subable Symbol where
   subst su x               = subSymbol (Just $ appSubst su x) x -- subSymbol (M.lookup x s) x
   syms x                   = [x]
 
-appSubst :: Subst -> Symbol -> Expr
+appSubst :: (Eq v, Hashable v) => SubstV v -> v -> ExprBV v v
 appSubst (Su s) x = fromMaybe (EVar x) (M.lookup x s)
 
-subSymbol :: Maybe Expr -> Symbol -> Symbol
+subSymbol :: (Ord v, Hashable v, Fixpoint v) => Maybe (ExprBV v v) -> v -> v
 subSymbol (Just (EVar y)) _ = y
 subSymbol Nothing         x = x
 subSymbol a               b = errorstar (printf "Cannot substitute symbol %s with expression %s" (showFix b) (showFix a))
 
-captureAvoiding :: Symbol -> (Symbol -> Expr) -> Symbol -> Expr
+captureAvoiding :: Eq v => v -> (v -> ExprBV b v) -> v -> ExprBV b v
 captureAvoiding x f y = if y == x then EVar x else f y
 
-instance Subable Expr where
+instance (Eq v, Hashable v) => Subable (ExprBV v v) where
+  type Variable (ExprBV v v) = v
   syms                     = exprSymbols
   substa f                 = substf (EVar . f)
-  substf :: (Symbol -> Expr) -> Expr -> Expr
+  substf :: (v -> ExprBV v v) -> ExprBV v v -> ExprBV v v
   substf f (EApp s e)      = EApp (substf f s) (substf f e)
   substf f (ELam (x,t) e)  = ELam (x, t) (substf (captureAvoiding x f) e)
   substf f (ECoerc a t e)  = ECoerc a t (substf f e)
@@ -195,17 +202,17 @@ instance Subable Expr where
           | otherwise      = errorstar "subst: PAll (without disjoint binds)"
   subst su (PExist bs p)
           | disjoint su bs = PExist bs $ subst su p --(substExcept su (fst <$> bs)) p
-          | otherwise      = errorstar ("subst: EXISTS (without disjoint binds)" ++ show (bs, su, p))
+          | otherwise      = errorstar "subst: EXISTS (without disjoint binds)"
   subst _  p               = p
 
-removeSubst :: Subst -> Symbol -> Subst
+removeSubst :: (Eq v, Hashable v) => SubstV v -> v -> SubstV v
 removeSubst (Su su) x = Su $ M.delete x su
 
-disjoint :: Subst -> [(Symbol, Sort)] -> Bool
+disjoint :: (Eq v, Hashable v) => SubstV v -> [(v, Sort)] -> Bool
 disjoint (Su su) bs = S.null $ suSyms `S.intersection` bsSyms
   where
-    suSyms = S.fromList $ syms (M.elems su) ++ syms (M.keys su)
-    bsSyms = S.fromList $ syms $ fst <$> bs
+    suSyms = S.fromList $ syms (M.elems su) ++ M.keys su
+    bsSyms = S.fromList $ fst <$> bs
 
 meetReft :: Reft -> Reft -> Reft
 meetReft (Reft (v, ra)) (Reft (v', ra'))
@@ -294,7 +301,7 @@ ppRas = cat . punctuate comma . map toFix . flattenRefas
     -- go _                  = []
 
 
-exprSymbols :: Expr -> [Symbol]
+exprSymbols :: (Eq v, Hashable v) => ExprBV v v -> [v]
 exprSymbols = S.toList . exprSymbolsSet
 
 instance Expression (Symbol, SortedReft) where

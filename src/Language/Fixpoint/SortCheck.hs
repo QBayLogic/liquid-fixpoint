@@ -8,6 +8,7 @@
 {-# LANGUAGE PatternGuards         #-}
 {-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE InstanceSigs #-}
 
 -- | This module has the functions that perform sort-checking, and related
@@ -531,7 +532,7 @@ checkSortExpr sp γ e = case runCM0 sp Nothing (checkExpr f e) of
             Just z  -> Found z
             Nothing -> Alts []
 
-subEnv :: (Subable e) => SEnv a -> e -> SEnv a
+subEnv :: (Subable e, Variable e ~ Symbol) => SEnv a -> e -> SEnv a
 subEnv g e = intersectWithSEnv const g g'
   where
     g' = fromListSEnv $ (, ()) <$> syms e
