@@ -73,6 +73,7 @@ module Language.Fixpoint.Types.Refinements (
   , reftPred
   , reftBind
   , toKVarSubst
+  , emptyKVarSubst
 
   -- * Predicates
   , isFunctionSortedReft, functionSort
@@ -308,6 +309,9 @@ toKVarSubst = KSu . M.toList
 
 mapKVarSubst :: (ExprBV b v -> ExprBV b' v) -> KVarSubst b v -> KVarSubst b' v
 mapKVarSubst f (KSu su) = KSu $ fmap (fmap f) su
+
+emptyKVarSubst :: KVarSubst b v
+emptyKVarSubst = KSu []
 
 isEmptyKVarSubst :: KVarSubst b v -> Bool
 isEmptyKVarSubst (KSu su) = null su
