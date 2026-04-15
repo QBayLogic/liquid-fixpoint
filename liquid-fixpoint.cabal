@@ -158,6 +158,7 @@ library
                   , store
                   , vector < 0.14
                   , syb
+                  , template-haskell
                   , text
                   , transformers
                   , unordered-containers

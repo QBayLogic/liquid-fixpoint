@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TemplateHaskellQuotes      #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ViewPatterns               #-}
 {-# LANGUAGE PatternGuards              #-}
@@ -153,6 +154,7 @@ import           Language.Fixpoint.Types.Binders
 import           Language.Fixpoint.Types.PrettyPrint
 import           Language.Fixpoint.Types.Spans
 import           Language.Fixpoint.Utils.Builder as Builder (fromText)
+import           Language.Haskell.TH.Syntax  (Lift(..))
 import Data.Functor.Contravariant (Contravariant(contramap))
 import qualified Data.Binary as B
 import qualified Data.Aeson       as Aeson
@@ -193,6 +195,9 @@ instance Ord Symbol where
   -- compare (S i _ _) (S j _ _) = compare i j
   -- compare s1 s2 = compare (symbolString s1) (symbolString s2)
   compare s1 s2 = compare (symbolText s1) (symbolText s2)
+
+instance Lift Symbol where
+  liftTyped s = [|| textSymbol $$(liftTyped $ symbolText s) ||]
 
 instance Interned Symbol where
   type Uninterned Symbol = T.Text
