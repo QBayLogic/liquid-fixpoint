@@ -52,8 +52,10 @@ module Language.Fixpoint.Types.Constraints (
 
   -- * Qualifiers
   , Qualifier
-  , QualifierV  (..)
-  , QualParam   (..)
+  , QualifierV
+  , QualifierBV (..)
+  , QualParam
+  , QualParamB (..)
   , QualPattern (..)
   , trueQual
   , qualifier
@@ -83,7 +85,8 @@ module Language.Fixpoint.Types.Constraints (
   , AxiomEnv (..)
   , Equation
   , DefinedFuns (..)
-  , EquationV (..)
+  , EquationV
+  , EquationBV (..)
   , mkEquation
   , Rewrite  (..)
   , AutoRewrite (..)
@@ -491,16 +494,18 @@ addIds = zipWith (\i c -> (i, shiftId i $ c {_sid = Just i})) [1..]
 -- | Qualifiers ----------------------------------------------------------------
 --------------------------------------------------------------------------------
 type Qualifier = QualifierV Symbol
-data QualifierV v = Q
-  { qName   :: !Symbol     -- ^ Name
-  , qParams :: [QualParam] -- ^ Parameters
-  , qBody   :: !(ExprV v)  -- ^ Predicate
-  , qPos    :: !SourcePos  -- ^ Source Location
+type QualifierV v = QualifierBV Symbol v
+data QualifierBV b v = Q
+  { qName   :: !b             -- ^ Name
+  , qParams :: [QualParamB b] -- ^ Parameters
+  , qBody   :: !(ExprBV b v)  -- ^ Predicate
+  , qPos    :: !SourcePos     -- ^ Source Location
   }
   deriving (Eq, Ord, Show, Data, Typeable, Generic, Functor, Foldable, Traversable)
 
-data QualParam = QP
-  { qpSym  :: !Symbol
+type QualParam = QualParamB Symbol
+data QualParamB b = QP
+  { qpSym  :: !b
   , qpPat  :: !QualPattern
   , qpSort :: !Sort
   }
@@ -1020,12 +1025,13 @@ instance PPrint DefinedFuns where
   pprintTidy k (MkDefinedFuns eqs) = pprintTidy k eqs
 
 type Equation = EquationV Symbol
-data EquationV v = Equ
-  { eqName :: !Symbol           -- ^ name of reflected function
-  , eqArgs :: [(Symbol, Sort)]  -- ^ names of parameters
-  , eqBody :: !(ExprV v)        -- ^ definition of body
-  , eqSort :: !Sort             -- ^ sort of body
-  , eqRec  :: !Bool             -- ^ is this a recursive definition
+type EquationV v = EquationBV Symbol v
+data EquationBV b v = Equ
+  { eqName :: !b            -- ^ name of reflected function
+  , eqArgs :: [(b, Sort)]   -- ^ names of parameters
+  , eqBody :: !(ExprBV b v) -- ^ definition of body
+  , eqSort :: !Sort         -- ^ sort of body
+  , eqRec  :: !Bool         -- ^ is this a recursive definition
   }
   deriving (Data, Eq, Ord, Show, Generic, Functor)
 

@@ -132,6 +132,7 @@ library
                   , async
                   , attoparsec
                   , base                 >= 4.9.1.0 && < 5
+                  , bifunctors
                   , binary
                   , boxes
                   , bytestring >= 0.10.2.1

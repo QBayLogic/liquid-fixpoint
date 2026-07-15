@@ -457,7 +457,7 @@ eapps                 = fold eappVis () []
     eapp' _ _            = []
 
 {-# SCC kvarsExpr #-}
-kvarsExpr :: ExprV v -> [KVar]
+kvarsExpr :: ExprBV b v -> [KVar]
 kvarsExpr = go []
   where
     go acc e0 = case e0 of
@@ -505,7 +505,7 @@ isKvarC = all isKvar . conjuncts . crhs
 isConcC :: (TaggedC c a) => c a -> Bool
 isConcC = all isConc . conjuncts . crhs
 
-isKvar :: Expr -> Bool
+isKvar :: (ExprBV b v) -> Bool
 isKvar PKVar{} = True
 isKvar _       = False
 

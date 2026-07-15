@@ -364,9 +364,9 @@ pprReft (Reft (v, p)) d
   = braces (toFix v <+> colon <+> d <+> text "|" <+> ppRas [p])
 
 -- RJ: this depends on `isTauto` hence, here.
-instance (PPrint v, Fixpoint v, Ord v) => PPrint (ReftV v) where
+instance (PPrint b, Hashable b, Ord b, Fixpoint b, PPrint v, Fixpoint v, Ord v) => PPrint (ReftBV b v) where
   pprintTidy k r
-    | isTautoReft r        = text "true"
+    | isTautoReft r    = text "true"
     | otherwise        = pprintReft k r
 
 instance PPrint SortedReft where

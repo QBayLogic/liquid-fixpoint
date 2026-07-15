@@ -14,6 +14,7 @@
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 {-# OPTIONS_GHC -Wno-orphans            #-}
@@ -117,7 +118,7 @@ module Language.Fixpoint.Types.Refinements (
   ) where
 
 import           Prelude hiding ((<>))
-import           Data.Bifunctor (first, second)
+import           Data.Bifunctor            (first, second)
 import qualified Data.Store as S
 import           Data.Generics             (Data, gmapT, mkT, extT)
 import           Data.Typeable             (Typeable)
@@ -140,7 +141,7 @@ import qualified Data.Text                 as T
 import qualified Data.HashMap.Strict       as M
 import           Control.DeepSeq
 import           Data.Maybe                (isJust)
-import           Language.Fixpoint.Types.Names
+import           Language.Fixpoint.Types.Names hiding (wildcard)
 import           Language.Fixpoint.Types.Binders
 import           Language.Fixpoint.Types.PrettyPrint
 import           Language.Fixpoint.Types.Spans
@@ -161,7 +162,7 @@ instance NFData Brel
 instance NFData Bop
 instance (NFData b, NFData v) => NFData (KVarSubst b v)
 instance (NFData b, NFData v) => NFData (ExprBV b v)
-instance NFData v => NFData (ReftV v)
+instance (NFData b, NFData v) => NFData (ReftBV b v)
 instance NFData SortedReft
 
 -- instance (Hashable k, Eq k, S.Store k, S.Store v) => S.Store (M.HashMap k v) where
@@ -194,7 +195,7 @@ instance (Hashable k, Eq k, B.Binary k, B.Binary v) => B.Binary (M.HashMap k v) 
 instance (B.Binary v, Hashable v) => B.Binary (SubstV v)
 instance (B.Binary b, B.Binary v) => B.Binary (KVarSubst b v)
 instance (B.Binary b, B.Binary v) => B.Binary (ExprBV b v)
-instance B.Binary v => B.Binary (ReftV v)
+instance (B.Binary b, B.Binary v) => B.Binary (ReftBV b v)
 
 
 reftConjuncts :: Reft -> [Reft]
@@ -209,7 +210,7 @@ isConc p = not (isKvar p)
 concConjuncts :: Expr -> [Expr]
 concConjuncts e = filter isConc (conjuncts e)
 
-isKvar :: Expr -> Bool
+isKvar :: (ExprBV b v) -> Bool
 isKvar (PKVar _ _) = True
 isKvar _           = False
 
@@ -236,7 +237,7 @@ instance Hashable Constant
 instance Hashable v => Hashable (SubstV v)
 instance (Hashable b, Hashable v) => Hashable (KVarSubst b v)
 instance (Hashable b, Hashable v) => Hashable (ExprBV b v)
-instance Hashable v => Hashable (ReftV v)
+instance (Hashable b, Hashable v) => Hashable (ReftBV b v)
 
 --------------------------------------------------------------------------------
 -- | Substitutions -------------------------------------------------------------
@@ -368,6 +369,7 @@ everywhereOnA f = go
     go = f . gmapT (mkT go `extT` map go)
 
 type Pred = Expr
+type PredBV b v = ExprBV b v
 
 pattern PTrue :: ExprBV b v
 pattern PTrue = PAnd []
@@ -876,7 +878,7 @@ vIntersperse _ []     = empty
 vIntersperse _ [d]    = d
 vIntersperse s (d:ds) = vcat (d : ((s <+>) <$> ds))
 
-pprintReft :: (PPrint v, Ord v, Fixpoint v) => Tidy -> ReftV v -> Doc
+pprintReft :: (PPrint b, Hashable b, Ord b, Fixpoint b, PPrint v, Ord v, Fixpoint v) => Tidy -> ReftBV b v -> Doc
 pprintReft k (Reft (_,ra)) = pprintBin z k trueD andD flat
   where
     flat = flattenRefas [ra]
@@ -890,54 +892,54 @@ pprintReft k (Reft (_,ra)) = pprintBin z k trueD andD flat
 
 -- | Values that can be viewed as Expressions
 
-class Expression a where
-  expr   :: a -> Expr
+class Expression b v a where
+  expr   :: a -> ExprBV b v
 
 -- | Values that can be viewed as Predicates
 
-class Predicate a where
-  prop   :: a -> Expr
+class Predicate b v a where
+  prop   :: a -> ExprBV b v
 
-instance Expression SortedReft where
+instance Expression Symbol Symbol SortedReft where
   expr (RR _ r) = expr r
 
-instance Expression Reft where
+instance Expression b v (ReftBV b v) where
   expr (Reft(_, e)) = e
 
-instance Expression Expr where
+instance Expression b v (ExprBV b v) where
   expr = id
 
 -- | The symbol may be an encoding of a SymConst.
 
-instance Expression Symbol where
+instance Expression b Symbol Symbol where
   expr s = eVar s
 
-instance Expression Text where
+instance Expression b Symbol Text where
   expr = ESym . SL
 
-instance Expression Integer where
+instance Expression b v Integer where
   expr = ECon . I
 
-instance Expression Int where
+instance Expression b v Int where
   expr = expr . toInteger
 
-instance Predicate Symbol where
+instance Predicate b Symbol Symbol where
   prop = eProp
 
-instance Predicate Expr where
+instance Predicate b v (ExprBV b v) where
   prop = id
 
-instance Predicate Bool where
+instance Predicate b v Bool where
   prop True  = PTrue
   prop False = PFalse
 
-instance Expression a => Expression (Located a) where
+instance Expression b v a => Expression b v (Located a) where
   expr   = expr . val
 
-eVar ::  Symbolic a => a -> Expr
+eVar ::  Symbolic a => a -> (ExprBV b Symbol)
 eVar = EVar . symbol
 
-eProp ::  Symbolic a => a -> Expr
+eProp ::  Symbolic a => a -> (ExprBV b Symbol)
 eProp = mkProp . eVar
 
 isSingletonExpr :: Symbol -> Expr -> Maybe Expr
@@ -982,7 +984,7 @@ pExist :: [(b, Sort)] -> ExprBV b v -> ExprBV b v
 pExist []  p = p
 pExist xts p = PExist xts p
 
-mkProp :: Expr -> Pred
+mkProp :: ExprBV b v -> PredBV b v
 mkProp = id
 
 --------------------------------------------------------------------------------
@@ -992,21 +994,37 @@ mkProp = id
 isSingletonReft :: Reft -> Maybe Expr
 isSingletonReft (Reft (v, ra)) = firstMaybe (isSingletonExpr v) $ conjuncts ra
 
-relReft :: (Expression a) => Brel -> a -> Reft
-relReft r e   = Reft (vv_, PAtom r (eVar vv_)  (expr e))
+data ReftVar v
+  = ReftVar
+  | ReftVarV v
+  deriving (Eq, Generic)
 
-exprReft, notExprReft, uexprReft ::  (Expression a) => a -> Reft
+instance Hashable v => Hashable (ReftVar v)
+
+fromReftVar :: v -> ReftVar v -> v
+fromReftVar v  ReftVar     = v
+fromReftVar _ (ReftVarV v) = v
+
+nameReftVar :: Binder v => v -> ReftBV (ReftVar v) (ReftVar v) -> ReftBV v v
+nameReftVar v = fmap (fromReftVar v) . mapBindReft (fromReftVar v)
+
+relReft :: (Expression b v a, Binder b) => Brel -> a -> ReftBV (ReftVar b) (ReftVar v)
+relReft r e   = Reft (ReftVar, PAtom r (EVar ReftVar) e')
+ where
+  e' = fmap ReftVarV $ mapBindExpr ReftVarV $ expr e
+
+exprReft, notExprReft, uexprReft ::  (Expression b v a, Binder b) => a -> ReftBV (ReftVar b) (ReftVar v)
 exprReft      = relReft Eq
 notExprReft   = relReft Ne
 uexprReft     = relReft Ueq
 
-propReft      ::  (Predicate a) => a -> Reft
-propReft p    = Reft (vv_, PIff (eProp vv_) (prop p))
+propReft      ::  (Predicate v v a, Binder v) => a -> ReftBV v v
+propReft p    = Reft (wildcard, PIff (EVar wildcard) (prop p))
 
-predReft      :: (Predicate a) => a -> Reft
-predReft p    = Reft (vv_, prop p)
+predReft      :: (Predicate b v a, Binder b) => a -> ReftBV b v
+predReft p    = Reft (wildcard, prop p)
 
-reft :: Symbol -> ExprV v -> ReftV v
+reft :: b -> ExprBV b v -> ReftBV b v
 reft v p = Reft (v, p)
 
 mapPredReft :: (Expr -> Expr) -> Reft -> Reft
@@ -1036,10 +1054,10 @@ reftBind (Reft (x, _)) = x
 ------------------------------------------------------------
 
 symbolReft    :: (Symbolic a) => a -> Reft
-symbolReft    = exprReft . eVar
+symbolReft    = nameReftVar vv_ . exprReft . eVar
 
 usymbolReft   :: (Symbolic a) => a -> Reft
-usymbolReft   = uexprReft . eVar
+usymbolReft   = nameReftVar vv_ . uexprReft . eVar
 
 vv_ :: Symbol
 vv_ = vv Nothing
