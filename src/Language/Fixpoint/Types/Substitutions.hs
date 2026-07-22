@@ -1,7 +1,8 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 {-# OPTIONS_GHC -Wno-orphans   #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -339,14 +340,13 @@ meetReft (Reft (v, ra)) (Reft (v', ra'))
   | v == wildcard    = Reft (v', pAnd [ra', ra `subst1`  (v , EVar v')])
   | otherwise        = Reft (v , pAnd [ra, ra' `subst1` (v', EVar v )])
 
-instance (Eq v, Hashable v, Refreshable v) => Subable (ReftBV v v) where
+instance (Eq v, Hashable v) => Subable (ReftBV v v) where
   type Variable (ReftBV v v) = v
   syms (Reft (v, ras))      = v : syms ras
   substa f (Reft (v, ras))  = Reft (f v, substa f ras)
   subst su (Reft (v, ras))  =
     let su' = substExcept su [v]
-        s = S.union (substSymbolsSet su') (exprSymbolsSet ras)
-     in Reft (v, rapierSubstExpr s su' ras)
+     in Reft (v, subst su' ras)
   substf f (Reft (v, ras))  = Reft (v, substf (substfExcept f [v]) ras)
   subst1 (Reft (v, ras)) su = Reft (v, subst1Except [v] ras su)
 
@@ -369,7 +369,7 @@ instance (PPrint b, Hashable b, Ord b, Fixpoint b, PPrint v, Fixpoint v, Ord v) 
     | isTautoReft r    = text "true"
     | otherwise        = pprintReft k r
 
-instance PPrint SortedReft where
+instance (PPrint b, Hashable b, Ord b, Fixpoint b, PPrint v, Fixpoint v, Ord v) => PPrint (SortedReftBV b v) where
   pprintTidy k (RR so (Reft (v, ras)))
     = braces
     $ pprintTidy k v <+> text ":" <+> toFix so <+> text "|" <+> pprintTidy k ras
@@ -427,5 +427,5 @@ ppRas = cat . punctuate comma . map toFix . flattenRefas
 exprSymbols :: (Eq v, Hashable v) => ExprBV v v -> [v]
 exprSymbols = S.toList . exprSymbolsSet
 
-instance Expression (Symbol, SortedReft) where
+instance Expression Symbol Symbol (Symbol, SortedReft) where
   expr (x, RR _ (Reft (v, r))) = subst1 (expr r) (v, EVar x)

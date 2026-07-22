@@ -2,7 +2,7 @@
 
 module UndoANFTests(tests) where
 
-import Language.Fixpoint.Types (SortedReft(..), Symbol,
+import Language.Fixpoint.Types (SortedReft, Symbol,
                                 isPrefixOfSym, anfPrefix, syms)
 import Language.Fixpoint.Solver.EnvironmentReduction (undoANFSimplifyingWith)
 import Arbitrary

@@ -75,7 +75,8 @@ import           Language.Fixpoint.Types.Refinements
   , ExprBV(..)
   , Expr
   , KVar(..)
-  , SortedReft(..)
+  , SortedReft
+  , SortedReftBV(..)
   , KVarSubst
   , pattern PTrue
   , pattern PFalse

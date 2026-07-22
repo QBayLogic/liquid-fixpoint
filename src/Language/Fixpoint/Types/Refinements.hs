@@ -15,6 +15,7 @@
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE ViewPatterns               #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 {-# OPTIONS_GHC -Wno-orphans            #-}
@@ -42,7 +43,8 @@ module Language.Fixpoint.Types.Refinements (
   , Reft
   , ReftV
   , ReftBV (..)
-  , SortedReft (..)
+  , SortedReft
+  , SortedReftBV (..)
 
   -- * Constructing Terms
   , eVar, elit
@@ -141,7 +143,7 @@ import qualified Data.Text                 as T
 import qualified Data.HashMap.Strict       as M
 import           Control.DeepSeq
 import           Data.Maybe                (isJust)
-import           Language.Fixpoint.Types.Names hiding (wildcard)
+import           Language.Fixpoint.Types.Names
 import           Language.Fixpoint.Types.Binders
 import           Language.Fixpoint.Types.PrettyPrint
 import           Language.Fixpoint.Types.Spans
@@ -568,10 +570,12 @@ newtype ReftBV b v = Reft (b, ExprBV b v)
 mapBindReft :: (Hashable b, Hashable b') => (b -> b') -> ReftBV b v -> ReftBV b' v
 mapBindReft f (Reft (b, e)) = Reft (f b, mapBindExpr f e)
 
-data SortedReft = RR { sr_sort :: !Sort, sr_reft :: !Reft }
-                  deriving (Eq, Ord, Data, Typeable, Generic)
+data SortedReftBV b v = RR { sr_sort :: !Sort, sr_reft :: !(ReftBV b v) }
+                        deriving (Eq, Ord, Data, Typeable, Generic)
 
-instance Hashable SortedReft
+type SortedReft = SortedReftBV Symbol Symbol
+
+instance (Hashable b, Hashable v) => Hashable (SortedReftBV b v)
 
 sortedReftSymbols :: SortedReft -> HashSet Symbol
 sortedReftSymbols sr =
@@ -994,26 +998,10 @@ mkProp = id
 isSingletonReft :: Reft -> Maybe Expr
 isSingletonReft (Reft (v, ra)) = firstMaybe (isSingletonExpr v) $ conjuncts ra
 
-data ReftVar v
-  = ReftVar
-  | ReftVarV v
-  deriving (Eq, Generic)
+relReft :: (Expression v v a, Binder v) => Brel -> v -> a -> ReftBV v v
+relReft r v e = Reft (v, PAtom r (EVar v) (expr e))
 
-instance Hashable v => Hashable (ReftVar v)
-
-fromReftVar :: v -> ReftVar v -> v
-fromReftVar v  ReftVar     = v
-fromReftVar _ (ReftVarV v) = v
-
-nameReftVar :: Binder v => v -> ReftBV (ReftVar v) (ReftVar v) -> ReftBV v v
-nameReftVar v = fmap (fromReftVar v) . mapBindReft (fromReftVar v)
-
-relReft :: (Expression b v a, Binder b) => Brel -> a -> ReftBV (ReftVar b) (ReftVar v)
-relReft r e   = Reft (ReftVar, PAtom r (EVar ReftVar) e')
- where
-  e' = fmap ReftVarV $ mapBindExpr ReftVarV $ expr e
-
-exprReft, notExprReft, uexprReft ::  (Expression b v a, Binder b) => a -> ReftBV (ReftVar b) (ReftVar v)
+exprReft, notExprReft, uexprReft ::  (Expression v v a, Binder v) => v -> a -> ReftBV v v
 exprReft      = relReft Eq
 notExprReft   = relReft Ne
 uexprReft     = relReft Ueq
@@ -1054,15 +1042,15 @@ reftBind (Reft (x, _)) = x
 ------------------------------------------------------------
 
 symbolReft    :: (Symbolic a) => a -> Reft
-symbolReft    = nameReftVar vv_ . exprReft . eVar
+symbolReft    = exprReft vv_ . eVar @_ @Symbol
 
 usymbolReft   :: (Symbolic a) => a -> Reft
-usymbolReft   = nameReftVar vv_ . uexprReft . eVar
+usymbolReft   = uexprReft vv_ . eVar @_ @Symbol
 
 vv_ :: Symbol
 vv_ = vv Nothing
 
-trueSortedReft :: Sort -> SortedReft
+trueSortedReft :: Binder b => Sort -> SortedReftBV b v
 trueSortedReft = (`RR` trueReft)
 
 trueReft, falseReft :: Binder b => ReftBV b v

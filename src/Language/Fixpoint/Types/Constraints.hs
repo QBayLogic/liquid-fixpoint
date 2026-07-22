@@ -397,7 +397,7 @@ instance Fixpoint a => Fixpoint (WfC a) where
   toFix w     = hang (text "\n\nwf:") 2 bd
     where bd  =   toFix (wenv w)
               -- NOTE: this next line is printed this way for compatability with the OCAML solver
-              $+$ text "reft" <+> toFix (RR t (Reft (v, PKVar k mempty)))
+              $+$ text "reft" <+> toFix (RR t (Reft (v, PKVar k mempty :: Expr)))
               $+$ toFixMeta (text "wf") (toFix (winfo w))
           (v, t, k) = wrft w
 

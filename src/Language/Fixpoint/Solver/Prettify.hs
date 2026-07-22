@@ -39,9 +39,11 @@ import           Language.Fixpoint.Types.Names
 import           Language.Fixpoint.Types.PrettyPrint
 import           Language.Fixpoint.Types.Refinements
   ( ExprBV(..)
+  , Expr
   , pattern PFalse
   , Reft
-  , SortedReft(..)
+  , SortedReft
+  , SortedReftBV(..)
   , conjuncts
   , expr
   , reft
@@ -92,7 +94,7 @@ prettyConstraint bindEnv c =
       simplifiedRhs = simplify $ inlineInSortedReft (`HashMap.lookup` boolSimplEnv) (srhs c)
 
       prunedEnv =
-        if expr simplifiedRhs /= PFalse then
+        if (expr simplifiedRhs :: Expr) /= PFalse then
           dropLikelyIrrelevantBindings
             (constraintSymbols simplifiedLhs simplifiedRhs)
             boolSimplEnv
